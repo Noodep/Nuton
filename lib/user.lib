@@ -1,0 +1,21 @@
+<?php
+
+	class User
+	{
+		private $_user_name = null;
+
+		public function __construct($username)
+		{ $this->_user_name = $username; }
+		
+		public function checkAuthenticity($password)
+		{
+			$u = DLA::findFirst_users_by_login($this->_user_name);
+			if( $u !== NULL && sha1($password) === $u->password )
+				return TRUE;
+			return FALSE;
+		}
+
+		public function getName(){return $this->_user_name;}
+	}
+
+?>

@@ -1,0 +1,327 @@
+<?php
+	include 'dla.conf'; // Insertion du fichier de conf static, pas de possibilites de multiples connexions.
+
+	class DLAException extends Exception{};
+	class DLA
+	{
+		private static $_ch = null;
+
+		private static $_schema = array();
+		private static $_constraints = array();
+
+		public static function connect()
+		{ self::$_ch = new PDO(DSN, DBUSER, DBPASS); }
+		
+		private static function initTableSchema($table_name)
+		{
+			// Check if table exists
+			$table_res =self::query('
+				SELECT count(table_name) as exists
+				FROM information_schema.tables
+				WHERE table_catalog=\''.DBNAME.'\' AND table_name=\''.$table_name.'\'
+				LIMIT 1
+				');
+
+			$table_row = $table_res->fetch(PDO::FETCH_ASSOC);
+			if($table_row['exists']==0)
+				throw new Exception('Table "'.$table_name.'" doesn\'t exist.');
+
+			//Table's schema definition
+			$schema_res = self::query('
+				SELECT *
+				FROM information_schema.columns
+				WHERE table_name=\''.$table_name.'\'
+			');
+			$schema_row = $schema_res->fetchAll(PDO::FETCH_ASSOC);
+
+			$table_schema = array();
+			foreach( $schema_row as $column ):
+				$table_schema[$column['column_name']] = array(
+					'is_nullable' => $column['is_nullable'],
+					'default' => $column['column_default'],
+					'type' => $column['udt_name'],
+					'max_length' => $column['character_maximum_length']
+					);
+			endforeach;
+
+			self::$_schema[$table_name] = $table_schema;
+
+			//Table's constraints definition
+			$constraints_res = self::query('
+				SELECT *
+				FROM information_schema.table_constraints T
+				INNER JOIN
+				information_schema.key_column_usage K
+				ON
+				T.constraint_name = K.constraint_name
+				WHERE T.table_name =\''.$table_name.'\'
+			');
+
+			$constraints_row = $constraints_res->fetchAll(PDO::FETCH_ASSOC);
+			$table_constraints = array();
+			foreach( $constraints_row as  $constraint ):
+				$table_constraints[$constraint['column_name']] = array(
+					'type' => $constraint['constraint_type']
+				);
+			endforeach;
+			self::$_constraints[$table_name] = $table_constraints;
+		}
+		
+		public static function __callStatic($method, $args)
+		{
+			if( self::$_ch === null )
+				self::connect();
+
+			$function = array();
+			$function = explode('_',$method);
+			
+			$attribute = null;
+			$method = $function[0];
+			$table_name = $function[1];
+			if(isset($function[2]) && $function[2] === 'by')
+				$attribute = $function[3];
+			
+			unset($function);
+
+			if( ! isset(self::$_schema[$table_name]) )
+				self::initTableSchema($table_name);
+
+			$values = isset($args[0])?$args[0]:null;
+			return self::analyze($method,$table_name,$attribute,$values);
+		}
+
+		public static function analyze($method,$table_name,$attribute,$values)
+		{
+			if($method === 'new')
+				return new Record(self::$_schema[$table_name], $table_name);
+
+			$query = '';
+			$data = array();
+
+			if($method === 'findAll' || $method === 'find' || $method === 'findFirst'):
+				$query = 'SELECT * FROM '.$table_name;
+				if($attribute !== null)
+					if(is_array($values)): // Multiples attributes
+						$int_string = array();
+						foreach($values as $value):
+							$int_string[] = '?';
+							$data[] = $value;
+						endforeach;
+						$query .= ' WHERE '.$attribute.' IN ('.implode(',', $int_string).')';
+					else: // Attribute is just a string
+						$data[] = $values;
+						$query .= ' WHERE '.$attribute.' = ?';
+					endif;
+				if($method === 'findFirst')
+					$query .= ' LIMIT 1';
+			endif;
+
+			$stmt = self::$_ch->prepare($query);
+			$stmt->execute($data);
+
+			$count = $stmt->rowCount();
+			if($count === 0):
+				return null;
+			elseif($method === 'findFirst'):
+				return new Record(self::$_schema[$table_name], $table_name, $stmt->fetch(PDO::FETCH_ASSOC));
+			else:
+				$res = array();
+				while(($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== FALSE):
+					$res[] = new Record(self::$_schema[$table_name], $table_name, $row);
+				endwhile;
+				return $res;
+			endif;
+		}
+		
+		public static function query($query)
+		{ return self::$_ch->query($query); }
+
+		public static function prepare($query)
+		{ return self::$_ch->prepare($query); }
+
+		public static function execute($stmt, $data)
+		{
+			if( !$stmt->execute($data) ):
+				$error_array = $stmt->getInfo();
+			 throw new DLAException ($error_array[1],$error_array[0]);
+			endif;
+			
+			return $stmt;
+		}
+
+		public static function lastInsertId($seq)
+		{ return self::$_ch->lastInsertId($seq.'_id_seq'); }
+	}
+	
+	class Record
+	{
+		private $_schema = null;
+		private $_type = null;
+		private $_id = null;
+
+		public function __construct($schema, $type, $hash=null)
+		{
+			$this->_schema = $schema;
+			$this->_type = $type;
+			
+			if ($hash):
+				$this->_id = $hash['id'];
+				unset($hash['id']);
+				foreach ($hash as $column_name => $value)
+					$this->_schema[$column_name]['value'] = $value;
+			endif;
+		}
+
+		public function __set ($attribute, $value) {
+			if( ! isset($this->_schema[$attribute]) )
+				throw new Exception('Column "'.$attribute.'" doesn\'t exist.');
+			$this->_schema[$attribute]['value'] = $value;
+			$this->_schema[$attribute]['has_changed'] = true;
+		}
+		
+		public function __get ($attribute) {
+			if($attribute === 'id')
+				return $this->_id;
+			
+			if( ! isset($this->_schema[$attribute]) )
+				throw new Exception('Column "'.$attribute.'" doesn\'t exist.');
+			return $this->_schema[$attribute]['value'];
+		}
+		
+		/**
+		* TODO : Il manque la remise a zero du statut has_changed de chaque variable
+		* TODO : Inserer les valeur par defaut apres chaque nouvelle insertion
+		*/
+		public function save()
+		{
+			$data = array();
+			
+			if( ! isset($this->_id) ):
+				$fields = array();
+				foreach( $this->_schema as $name => $infos ):
+					if( isset($infos['has_changed']) ):
+						$data[] =  $infos['value'];
+						$fields[] = $name;
+					endif;
+				endforeach;
+				$query = 'INSERT INTO '.$this->_type.'('.implode(',',$fields).') VALUES('.implode(',', array_fill(0, count($fields), '?')).');';
+			else:
+				$sets = array();
+				foreach( $this->_schema as $name => $infos ):
+					if( isset($infos['value']) ):
+						$data[] =  $infos['value'];
+						$sets[] = $name.'=?';
+					endif;
+				endforeach;
+				$query = 'UPDATE '.$this->_type.' SET '.implode(',',$sets).' WHERE id = '.$this->_id.';';
+			endif;
+
+			$stmt = DLA::prepare($query);
+			$stmt->execute($data);
+			
+			if($this->_id === null)
+				$this->_id = DLA::lastInsertId($this->_type);
+		}
+
+	}
+/*
+	
+
+		public function find($ids, $constraints=null) {
+			$unique = false;
+			$conditions = $order = $limit = '';
+			$data = array();
+
+
+			if( $constraints!=null ):
+			
+				if( isset($constraints["conditions"]) ):
+
+					if(is_array($constraints["conditions"])):
+
+						$conds = array();
+						foreach( $constraints["conditions"] as $cond_key => $cond_value ):
+							$conds[]= $cond_key.'=?';
+							$data[] = $cond_value;
+						endforeach;
+						$conditions = implode('AND',$conds);
+					else:
+
+						$conditions = $constraints["conditions"];
+					endif;
+					$conditions = ' WHERE '.$conditions ;
+				endif;
+				
+				if( isset($constraints["limit"]) )
+						$limit = ' LIMIT '.intval($constraints["limit"]);
+				
+				if( isset($constraints["order"]) )
+					
+					if( is_array($constraints["order"]) ):
+						$ord_t = array();
+						foreach( $constraints["order"] as $value ):
+							$ord_t[] = '?';
+							$data[] = $value;
+						endforeach;
+						$order = implode(',', $ord_t);
+					else:
+						$order = '?';
+						$data[] = $constraints["order"];
+					endif;
+					$order = ' ORDER BY '.$order;
+			endif;
+			
+			$query = '';
+
+			if( $ids == 'all' ):
+				$query = 'SELECT * FROM '.$this->_table_name.$conditions.$order.$limit;
+			elseif( $ids == 'first' ):
+				$query = 'SELECT * FROM '.$this->_table_name.$conditions.$order.' LIMIT 1';
+				$unique = true;
+			elseif( is_array($ids) ):
+				$ids_t =array();
+				foreach( $ids as $id )
+					$ids_t[] = intval($id);
+				$ids = implode(',',$ids_t);
+				$query = 'SELECT * FROM '.$this->_table_name.' WHERE id IN ('.$ids.')';
+			elseif( is_numeric($ids) ):
+				$query = 'SELECT * FROM '.$this->_table_name.' WHERE id = '.intval($ids);
+				$unique = true;
+			else:
+				throw new ELokiException('Bad query !');
+			endif;
+			
+
+			debug($query);
+			$stmt = $this->prepare($query);
+			$stmt->execute($data);
+			
+			$res = $stmt->fetchAll(PDO::FETCH_ASSOC);
+			$obj = array();
+			foreach( $res as $row )
+				$obj[] = new Fenrir($this->_db, $this->_table_name, $row, false);
+			
+			if( $unique )
+				return $obj[0];
+			return $obj;
+		}
+	}
+	
+	class Fenrir
+	{
+		private $_type = null;
+		private $_db = null;
+		private $_values = array();
+		private $_has_changed = array();
+		private $_is_new= true;
+		
+		public function __construct($db, $type, $hash=null, $new = true) {
+			$this->_type = $type;
+			$this->_db = $db;
+			$this->_is_new = $new;
+			
+			if( $hash != null )
+				$this->fill($hash);
+		}
+*/
+?>

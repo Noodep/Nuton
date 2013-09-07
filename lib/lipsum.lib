@@ -1,0 +1,50 @@
+<?php
+
+define('LIPSUM_URL','http://www.lipsum.com/feed/xml');
+
+class lipsum
+{
+	private static $_ch = null;
+	private static $_post_data = null;
+
+	private final static function connect()
+	{
+		self::$_ch = curl_init();
+
+		curl_setopt(self::$_ch, CURLOPT_URL, LIPSUM_URL);
+		curl_setopt(self::$_ch, CURLOPT_RETURNTRANSFER, 1);
+		curl_setopt(self::$_ch, CURLOPT_HEADER, 0);
+		curl_setopt(self::$_ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_6; en-US) AppleWebKit/534.13 (KHTML, like Gecko) Chrome/9.0.597.102 Safari/534.13');
+		curl_setopt(self::$_ch, CURLOPT_POST, 1);
+
+		self::$_post_data = array(
+			'what' => 'paras'
+		);
+
+	}
+
+	private static function extract($str)
+	{
+		$doc = new DOMDocument();
+		$doc->validateOnParse = TRUE;
+		$doc->loadXML($str);
+		return explode("\n",htmlentities($doc->getElementSByTagName('lipsum')->item(0)->nodeValue, ENT_QUOTES, 'UTF-8'));
+	}
+
+	public static function p($times=1, $usual_start = TRUE)
+	{
+		if(self::$_ch === null)
+			self::connect();
+		self::$_post_data['amount'] = $times;
+		if($usual_start)
+			self::$_post_data['start'] = 'yes';
+		curl_setopt(self::$_ch, CURLOPT_POSTFIELDS, self::$_post_data);
+		$data = self::extract(curl_exec(self::$_ch));
+		curl_close(self::$_ch);
+		if($times===1)
+			return $data[0];
+
+		return $data;
+	}
+}
+?>

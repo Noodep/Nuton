@@ -1,0 +1,85 @@
+@import url(reset.less);
+
+@import url(grid.less);
+
+@import url(base.less);
+
+@import url(font.less);
+
+@hover_state:lightblue;
+@border:#eaeaea;
+
+body
+{
+	font-size: 12px;
+	font-family: 'CopperplateGothicLightRegular';
+	color: #aaa;
+}
+/*body{background: url("img/grid_18.png");}*/
+
+header
+{
+	margin-top:4.5em;
+	margin-bottom:4.5em;
+	aside#maxime p
+	{
+		margin-top:0;
+		margin-bottom:0;	
+	}
+	img{
+		height: 72px;
+	}
+}
+
+section
+{
+	header
+	{
+		margin:1.5em 0;
+	}
+}
+
+a
+{
+	-webkit-transition: color .25s ease-in-out;
+	-moz-transition: color .25s ease-in-out;
+	transition: color .25s ease-in-out;
+	
+	&:hover
+	{
+		color:@hover_state;
+	}
+}
+
+/* Menu */
+nav
+{
+	font-size:1em;
+	line-height:1.5em;
+	margin-top:1.5em;
+	margin-bottom:1.5em;
+
+	ul
+	{
+	text-align: center;
+		li
+		{
+			display: inline;
+			margin-right: 1.5em;
+			margin-top: 1.5em;
+			margin-bottom: 1.5em;
+		}
+	}	
+}
+
+article
+{
+	img
+	{
+		margin-bottom: 1.5em;
+	}
+	footer
+	{
+		text-align: right;
+	}
+}

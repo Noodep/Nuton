@@ -1,0 +1,57 @@
+<?php
+include_once 'utils.lib';
+
+	class Media
+	{
+		protected $_file_name;
+		public function __construct($file)
+		{
+			$this->_file_name = $file;
+		}	
+	}
+	
+	class Video extends Media
+	{
+		public function __toString()
+		{
+			$current_browser = getBrowser();
+			$supported_browser = array(
+				'firefox' => 3.5,
+				'chrome' => 3.0,
+				'safari' => 3.0,
+				'msie' => 9.0,
+				'opera' => 10.5,
+			);
+			$html5 = false;
+			
+			foreach( $supported_browser as $browser => $version )
+				if($current_browser['name'] === $browser && $current_browser['version'] >= $version )
+					$html5 = true;
+			
+			if(false):
+				$string ='	<video controls="controls">
+							<source src="'.$this->_file_name.'.mp4" type=\'video/mp4 codecs="avc1.42E01E, mp4a.40.2"\' />
+							<source src="'.$this->_file_name.'.ogv" type=\'video/ogg; codecs="theora, vorbis"\' />
+							</video>';
+			else:
+				$string ='	<script src="/js/flowplayer/flowplayer-3.2.4.min.js"></script>
+							<a href="'.$this->_file_name.'.flv"	style="display:block;" id="player"></a>
+							<script language="JavaScript">flowplayer("player", {src:"/js/flowplayer//flowplayer-3.2.5.swf", width:576, height:471});</script>';
+			endif;
+			
+			return $string;
+		}
+	}
+	
+	class Gallery extends Media
+	{
+		public function display_gallery()
+		{
+		/*
+			$string = '';
+			
+			<img src="images/testing.jpg" width="10" height="10" alt="testing" />
+			*/
+		}
+	}
+?>

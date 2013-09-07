@@ -1,0 +1,19 @@
+<?php
+    class SessionException extends Exception{};
+    class Session
+    {
+        public static function apply_filter($data)
+        {
+            session_start();
+            session_regenerate_id(TRUE);
+            return ($_SESSION['connected'] !== TRUE);
+        }
+
+        public static function session_destroy()
+        {
+            session_start();
+            session_destroy();
+            redirect_to('/');
+        }
+    };
+?>

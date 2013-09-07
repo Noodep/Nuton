@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="fr">
+	<head>
+		<meta charset="UTF-8" />
+		<link rel="stylesheet" href="/css/s.css" type="text/css" media="screen" title="style" charset="utf-8">
+		<title>Default Layout</title>
+	</head>
+	<body>
+		<header></header>
+		<section>
+			<?php include $view;  ?>
+		</section>
+		<footer>
+			Powered by Nuton&#8482; framework
+			<br />
+			&copy;&nbsp;2011
+		</footer>
+	</body>
+</html>

@@ -1,0 +1,86 @@
+<?php
+include_once 'utils.lib';
+
+class RouterException extends Exception {};
+class Router
+{
+	private $routes = array();
+	
+	public function __construct($routes)
+	{
+		$this->routes = $routes;
+	}
+	
+	public function dispatch($server_infos)
+	{
+		$route = $this->match($server_infos['REQUEST_URI']);
+
+                $module = $route['module'];
+		unset($route['module']);
+		
+		if(($mod_file = LocateModule($module)) === null)
+			throw new RouterException('Inexistant Module "'.$module.'" : please check module directory in your framework !');
+		
+		include $mod_file;
+
+                $module_class_name = ucfirst(strtolower($module)).'Module';
+		$mod_obj= new $module_class_name();
+		$action = $route['action'];
+		unset($route['action']);
+		
+		if(!method_exists($mod_obj, $action))
+			throw new RouterException('Inexistant action "'.$action.'" for module "'.$module.'" : please check module class file in your framework !');
+		
+		// plug-in inclusion
+		if(isset($route['plugins']))
+			foreach( $route['plugins'] as $plugin_name ):
+				if(($plugin = LocateLib($plugin_name)) === null)
+					throw new RouterException('Inexistant plug-in "'.$plugin_name.'" : please check lib directory !');
+				include $plugin;
+			endforeach;
+		unset($route['plugins']);
+
+                //Action
+		$data = $mod_obj->$action($route);
+		
+		//if is_not ajax
+		if(($view = LocateView($module, $action)) === null)
+			throw new RouterException('Inexistant view for request action "'.$action.'" in module "'.$module.'" : please check view directory associated with your module in your framework !');
+		
+		$layout_name = isset($route['layout'])?$route['layout']:'default';
+		unset($route['layout']);
+		if(($layout = LocateLayout($layout_name)) === null)
+			throw new RouterException('Inexistant layout "'.$layout_name.'" : please check layout directory !');
+		
+		include $layout;
+	}
+	
+	private function match($request_uri)
+	{
+		$request_path = explode('/',trim($request_uri,'/'));
+		$nb_atoms = count($request_path);
+		$valid_route = null;
+		foreach($this->routes as $path => $route):
+			$valid_route=$route;
+			if($path==='*')	break;
+			$current_path = explode('/',trim($path,'/'));
+			if($nb_atoms !== count($current_path)) continue;
+			for($i=0;$i<$nb_atoms;$i++):
+				$atom = $current_path[$i];
+				if($atom[0]===':'):
+					$atom = substr($atom,1);
+					if(isset($route[$atom]) && !in_array($request_path[$i],$route[$atom])) break;
+					$valid_route[$atom]=$request_path[$i];
+				else:
+					if($atom!==$request_path[$i]) break;
+				endif;
+				if($i===$nb_atoms-1) break 2;
+			endfor;
+		endforeach;
+		return $valid_route;
+	}
+	
+	public function setRoutes($routes)
+	{ $this->routes = $routes; }
+};
+?>

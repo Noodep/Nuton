@@ -1,0 +1,107 @@
+<?php
+
+	function debug ( $value )
+	{
+		echo '<pre>'.$value.PHP_EOL.'</pre>';
+	}
+	
+	function dump ( $value )
+	{
+		echo '<pre>';
+		var_export($value);
+		echo PHP_EOL.'</pre>';
+	}
+	
+	function RedirectTo($location)
+	{ 
+		debug($location);
+		header('Location:'.$location);
+	}
+	
+	function LocateModule($name)
+	{
+		$module_file = APPLICATION_ROOT.'module/'.$name.'.mod';
+		if(file_exists($module_file))
+			return $module_file;
+		$module_file = FRAMEWORK_ROOT.'module/'.$name.'.mod';
+		if(file_exists($module_file))
+			return $module_file;
+		return null;
+	}
+	
+	function LocateLib($name)
+	{
+		$lib_file = APPLICATION_ROOT.'lib/'.$name.'.lib';
+		if(file_exists($lib_file))
+			return $lib_file;
+		$lib_file = FRAMEWORK_ROOT.'lib/'.$name.'.lib';
+		if(file_exists($lib_file))
+			return $lib_file;
+		return null;
+	}
+	
+	function LocateView($module, $action)
+	{
+		$view_file = APPLICATION_ROOT.'module/'.$module.'/'.$action.'.view';
+		if(file_exists($view_file))
+			return $view_file;
+		$view_file = FRAMEWORK_ROOT.'module/'.$module.'/'.$action.'.view';
+		if(file_exists($view_file))
+			return $view_file;
+		return null;
+	}
+	
+	function LocateLayout($name)
+	{
+		$layout_file = APPLICATION_ROOT.'layout/'.$name.'.layout';
+		if(file_exists($layout_file))
+			return $layout_file;
+		$layout_file = FRAMEWORK_ROOT.'layout/'.$name.'.layout';
+		if(file_exists($layout_file))
+			return $layout_file;
+		return null;
+	}
+	
+	function getBrowser()
+	{
+		$browsers = array("firefox", "msie", "opera", "chrome", "safari", "mozilla", "seamonkey", "konqueror", "netscape", "gecko", "navigator", "mosaic", "lynx", "amaya", "omniweb", "avant", "camino", "flock", "aol");
+		$agent = strtolower($_SERVER['HTTP_USER_AGENT']);
+		$data = array();
+		foreach($browsers as $browser):
+			if (preg_match("#($browser)[/ ]?([0-9.]*)#", $agent, $match)):
+				$data['name'] = $match[1] ;
+				$data['version'] = $match[2] ;
+				break ;
+			endif;
+		endforeach;
+		return $data;
+	}
+
+	function cropText($text, $size=512)
+	{
+		$ret = substr($text,0, $size);
+		return $ret." ...";
+	}
+
+	function decodePostgresTimestamp($timestamp)
+	{
+		$c = array(
+				'01' => 'January',
+				'02' => 'February',
+				'03' => 'March',
+				'04' => 'April',
+				'05' => 'May',
+				'06' => 'June',
+				'07' => 'July',
+				'08' => 'August',
+				'09' => 'September',
+				'10' => 'October',
+				'11' => 'November',
+				'12' => 'December'
+				);
+
+		$data = explode(' ',$timestamp);
+		$date = explode('-',$data[0]);
+		return $c[$date[1]].' '.$date[2].', '.$date[0];
+	}
+?>
